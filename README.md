@@ -1,8 +1,8 @@
-# 💁🏻‍♀️ Bella Xu's Award-Winning Folio 🏃🏻‍♀️
+# 🐱 Catzaib Park 🏃🏻‍♀️
 
 **[Live site](http://bellas-park.com/)**
 
-This repo contains code of Bella Xu's Folio. It is a small recreation of Bella's Folio for a [intro course](https://www.youtube.com/watch?v=X3pPAdQBKHo) to creative web development with three.js and Blender. Won [Special Kudos and Best UI/UX/Innovation awards](https://www.cssdesignawards.com/sites/bellas-park/46895/) from CSSDA!!!
+This repo contains code for Catzaib Park. It started as a recreation project from a [intro course](https://www.youtube.com/watch?v=X3pPAdQBKHo) on creative web development with three.js and Blender, and is now being customized into a new creative experience.
 
 ![Page screenshot](/media/og-image.webp?raw=true "Page screenshot")
 

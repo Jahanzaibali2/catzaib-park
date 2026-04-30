@@ -51,6 +51,7 @@ function stopSound(soundId) {
 //three.js setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xaec972);
+scene.fog = new THREE.Fog(0xaec972, 120, 320);
 const canvas = document.getElementById("experience-canvas");
 const sizes = {
   width: window.innerWidth,
@@ -114,6 +115,8 @@ const secondIcon = document.querySelector(".second-icon");
 const audioToggleButton = document.querySelector(".audio-toggle-button");
 const firstIconTwo = document.querySelector(".first-icon-two");
 const secondIconTwo = document.querySelector(".second-icon-two");
+const questStatus = document.getElementById("questStatus");
+const questCounter = document.getElementById("questCounter");
 
 // Modal stuff
 const modalContent = {
@@ -136,9 +139,9 @@ const modalContent = {
     link: "https://example.com/",
   },
   Chest: {
-    title: "💁‍♀️ About Me",
+    title: "👨 About Me",
     content:
-      "Hi you found my chest👋, I'm Bella Xu and I am an aspiring creative developer and designer. I just started web development this year! In the signs, you will see some of my most recent projects that I'm proud of. I hope to add a lot more in the future. In my free time, I like to draw, watch TV shows (especially Pokémon), do clay sculpting and needle felting. Reach out if you wanna chat. Bella is OUT!!! 🏃‍♀️",
+      "Hi you found my chest👋, I'm Catzaib and I am an aspiring creative developer and designer. I just started web development this year! In the signs, you will see some of my most recent projects that I'm proud of. I hope to add a lot more in the future. In my free time, I like to draw, watch TV shows (especially Pokémon), do clay sculpting and needle felting. Reach out if you wanna chat. Catzaib is OUT!!! 🏃‍♀️",
   },
   Picnic: {
     title: "🍷 Uggh yesss 🧺",
@@ -193,6 +196,124 @@ const intersectObjectsNames = [
   "Snorlax",
   "Chest",
 ];
+
+const collectibleCritters = new Set([
+  "Bulbasaur",
+  "Chicken",
+  "Pikachu",
+  "Charmander",
+  "Squirtle",
+  "Snorlax",
+]);
+
+const pokemonCritters = new Set([
+  "Bulbasaur",
+  "Pikachu",
+  "Charmander",
+  "Squirtle",
+  "Snorlax",
+]);
+
+const critterClickCounts = new Map();
+const movingPokemon = new Set();
+const pokemonStartPositions = new Map();
+
+const pokemonPatrolOffsets = {
+  Bulbasaur: new THREE.Vector3(4, 0, 0),
+  Pikachu: new THREE.Vector3(-4, 0, 0),
+  Charmander: new THREE.Vector3(0, 0, 4),
+  Squirtle: new THREE.Vector3(0, 0, -4),
+  Snorlax: new THREE.Vector3(3, 0, 3),
+};
+
+const worldState = {
+  collectedCritters: new Set(),
+  targetCollectibles: 3,
+  secretUnlocked: false,
+};
+
+function updateQuestUI() {
+  const collectedCount = Math.min(
+    worldState.collectedCritters.size,
+    worldState.targetCollectibles
+  );
+
+  questCounter.textContent = `Collected: ${collectedCount} / ${worldState.targetCollectibles}`;
+  questStatus.textContent = worldState.secretUnlocked
+    ? "Secret unlocked! Visit the picnic spot."
+    : "Collect 3 critters to unlock a secret.";
+}
+
+function unlockSecretEncounter() {
+  worldState.secretUnlocked = true;
+  modalContent.Picnic.title = "🌌 Secret Picnic Portal";
+  modalContent.Picnic.content =
+    "You unlocked the secret vibe zone. This picnic now doubles as your portal to the creative side of Catzaib Park.";
+  modalContent.Picnic.link = "https://example.com/";
+  modalContent.Chest.content =
+    "Legend status! You unlocked the hidden picnic portal by collecting critters. Keep exploring Catzaib Park for more secrets.";
+}
+
+function startPokemonPatrol(pokemonName) {
+  if (movingPokemon.has(pokemonName)) {
+    return;
+  }
+
+  const pokemon = scene.getObjectByName(pokemonName);
+  if (!pokemon) {
+    return;
+  }
+
+  const pointA = pokemonStartPositions.get(pokemonName) || pokemon.position.clone();
+  const pointB = pointA.clone().add(
+    pokemonPatrolOffsets[pokemonName] || new THREE.Vector3(3, 0, 0)
+  );
+
+  pokemon.position.copy(pointA);
+  movingPokemon.add(pokemonName);
+
+  gsap.to(pokemon.position, {
+    x: pointB.x,
+    y: pointB.y,
+    z: pointB.z,
+    duration: 1.8,
+    ease: "sine.inOut",
+    repeat: -1,
+    yoyo: true,
+  });
+}
+
+function collectCritter(critterName) {
+  if (!worldState.collectedCritters.has(critterName)) {
+    worldState.collectedCritters.add(critterName);
+  }
+
+  if (pokemonCritters.has(critterName)) {
+    const nextCount = (critterClickCounts.get(critterName) || 0) + 1;
+    critterClickCounts.set(critterName, nextCount);
+
+    if (nextCount >= 5) {
+      startPokemonPatrol(critterName);
+    }
+  }
+
+  if (isCharacterReady) {
+    if (!isMuted) {
+      playSound("pokemonSFX");
+    }
+    jumpCharacter(critterName);
+    isCharacterReady = false;
+  }
+
+  if (
+    !worldState.secretUnlocked &&
+    worldState.collectedCritters.size >= worldState.targetCollectibles
+  ) {
+    unlockSecretEncounter();
+  }
+
+  updateQuestUI();
+}
 
 // Loading screen and loading manager
 // See: https://threejs.org/docs/#api/en/loaders/managers/LoadingManager
@@ -254,6 +375,10 @@ loader.load(
         child.receiveShadow = true;
       }
 
+      if (pokemonCritters.has(child.name)) {
+        pokemonStartPositions.set(child.name, child.position.clone());
+      }
+
       if (child.name === "Character") {
         character.spawnPosition.copy(child.position);
         character.instance = child;
@@ -300,7 +425,10 @@ scene.add(sun);
 // const sunHelper = new THREE.CameraHelper(sun);
 // scene.add(sunHelper);
 
-const light = new THREE.AmbientLight(0x404040, 2.7);
+sun.color.set(0xb9a7ff);
+sun.intensity = 0.9;
+
+const light = new THREE.AmbientLight(0x7468c9, 1.2);
 scene.add(light);
 
 // Camera Stuff
@@ -350,9 +478,9 @@ function jumpCharacter(meshID) {
   if (!isCharacterReady) return;
 
   const mesh = scene.getObjectByName(meshID);
+  if (!mesh) return;
   const jumpHeight = 2;
   const jumpDuration = 0.5;
-  const isSnorlax = meshID === "Snorlax";
 
   const currentScale = {
     x: mesh.scale.x,
@@ -363,17 +491,17 @@ function jumpCharacter(meshID) {
   const t1 = gsap.timeline();
 
   t1.to(mesh.scale, {
-    x: isSnorlax ? currentScale.x * 1.2 : 1.2,
-    y: isSnorlax ? currentScale.y * 0.8 : 0.8,
-    z: isSnorlax ? currentScale.z * 1.2 : 1.2,
+    x: currentScale.x * 1.2,
+    y: currentScale.y * 0.8,
+    z: currentScale.z * 1.2,
     duration: jumpDuration * 0.2,
     ease: "power2.out",
   });
 
   t1.to(mesh.scale, {
-    x: isSnorlax ? currentScale.x * 0.8 : 0.8,
-    y: isSnorlax ? currentScale.y * 1.3 : 1.3,
-    z: isSnorlax ? currentScale.z * 0.8 : 0.8,
+    x: currentScale.x * 0.8,
+    y: currentScale.y * 1.3,
+    z: currentScale.z * 0.8,
     duration: jumpDuration * 0.3,
     ease: "power2.out",
   });
@@ -389,9 +517,9 @@ function jumpCharacter(meshID) {
   );
 
   t1.to(mesh.scale, {
-    x: isSnorlax ? currentScale.x * 1.2 : 1,
-    y: isSnorlax ? currentScale.y * 1.2 : 1,
-    z: isSnorlax ? currentScale.z * 1.2 : 1,
+    x: currentScale.x * 1.2,
+    y: currentScale.y * 1.2,
+    z: currentScale.z * 1.2,
     duration: jumpDuration * 0.3,
     ease: "power1.inOut",
   });
@@ -409,15 +537,13 @@ function jumpCharacter(meshID) {
     ">"
   );
 
-  if (!isSnorlax) {
-    t1.to(mesh.scale, {
-      x: 1,
-      y: 1,
-      z: 1,
-      duration: jumpDuration * 0.2,
-      ease: "elastic.out(1, 0.3)",
-    });
-  }
+  t1.to(mesh.scale, {
+    x: currentScale.x,
+    y: currentScale.y,
+    z: currentScale.z,
+    duration: jumpDuration * 0.2,
+    ease: "elastic.out(1, 0.3)",
+  });
 }
 
 function onClick() {
@@ -440,23 +566,8 @@ function handleInteraction() {
   }
 
   if (intersectObject !== "") {
-    if (
-      [
-        "Bulbasaur",
-        "Chicken",
-        "Pikachu",
-        "Charmander",
-        "Squirtle",
-        "Snorlax",
-      ].includes(intersectObject)
-    ) {
-      if (isCharacterReady) {
-        if (!isMuted) {
-          playSound("pokemonSFX");
-        }
-        jumpCharacter(intersectObject);
-        isCharacterReady = false;
-      }
+    if (collectibleCritters.has(intersectObject)) {
+      collectCritter(intersectObject);
     } else {
       if (intersectObject) {
         showModal(intersectObject);
@@ -598,9 +709,10 @@ function toggleTheme() {
   if (!isMuted) {
     playSound("projectsSFX");
   }
-  const isDarkTheme = document.body.classList.contains("dark-theme");
+  const wasDarkTheme = document.body.classList.contains("dark-theme");
   document.body.classList.toggle("dark-theme");
   document.body.classList.toggle("light-theme");
+  const isDarkTheme = !wasDarkTheme;
 
   if (firstIcon.style.display === "none") {
     firstIcon.style.display = "block";
@@ -611,29 +723,45 @@ function toggleTheme() {
   }
 
   gsap.to(light.color, {
-    r: isDarkTheme ? 1.0 : 0.25,
-    g: isDarkTheme ? 1.0 : 0.31,
-    b: isDarkTheme ? 1.0 : 0.78,
+    r: isDarkTheme ? 0.25 : 1.0,
+    g: isDarkTheme ? 0.31 : 1.0,
+    b: isDarkTheme ? 0.78 : 1.0,
     duration: 1,
     ease: "power2.inOut",
   });
 
   gsap.to(light, {
-    intensity: isDarkTheme ? 0.8 : 0.9,
+    intensity: isDarkTheme ? 0.9 : 1.4,
     duration: 1,
     ease: "power2.inOut",
   });
 
   gsap.to(sun, {
-    intensity: isDarkTheme ? 1 : 0.8,
+    intensity: isDarkTheme ? 0.8 : 1.0,
     duration: 1,
     ease: "power2.inOut",
   });
 
   gsap.to(sun.color, {
-    r: isDarkTheme ? 1.0 : 0.25,
-    g: isDarkTheme ? 1.0 : 0.41,
-    b: isDarkTheme ? 1.0 : 0.88,
+    r: isDarkTheme ? 0.25 : 1.0,
+    g: isDarkTheme ? 0.41 : 1.0,
+    b: isDarkTheme ? 0.88 : 1.0,
+    duration: 1,
+    ease: "power2.inOut",
+  });
+
+  gsap.to(scene.background, {
+    r: isDarkTheme ? 0.12 : 0.68,
+    g: isDarkTheme ? 0.15 : 0.79,
+    b: isDarkTheme ? 0.26 : 0.45,
+    duration: 1,
+    ease: "power2.inOut",
+  });
+
+  gsap.to(scene.fog.color, {
+    r: isDarkTheme ? 0.12 : 0.68,
+    g: isDarkTheme ? 0.15 : 0.79,
+    b: isDarkTheme ? 0.26 : 0.45,
     duration: 1,
     ease: "power2.inOut",
   });
@@ -780,6 +908,8 @@ window.addEventListener("blur", () => {
     pressedButtons[key] = false;
   });
 });
+
+updateQuestUI();
 
 // Adding Event Listeners (tbh could make some of these just themselves rather than seperating them, oh well)
 modalExitButton.addEventListener("click", hideModal);
